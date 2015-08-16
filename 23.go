@@ -76,13 +76,13 @@ func main() {
 				continue
 			}
 			defer resp.Body.Close()
-			res := &[]FileInfo{}
+			res := []FileInfo{}
 			err3 := json.Unmarshal(data, &res)
 			if err3 != nil {
 				fmt.Printf("Error : %s", err3)
 				continue
 			}
-			for i, f := range *res {
+			for i, f := range res {
 				fmt.Println(i, " ", f.Name, " size: ", f.Size)
 			}
 		case input == "delete":
