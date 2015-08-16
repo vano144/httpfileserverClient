@@ -56,7 +56,7 @@ func main() {
 	for {
 		fmt.Println("input command: show, delete,download,upload,exit")
 		fmt.Scanln(&input)
-		switch true {
+		switch {
 		case input == "show":
 			req, err := http.NewRequest("GET", Url, nil)
 			if err != nil {
@@ -101,11 +101,11 @@ func main() {
 				fmt.Printf("Error : %s", err)
 				continue
 			}
-		case input == "upload":
+		case input == "download":
 			fmt.Println("input name of file")
 			var nameOfFile string
 			fmt.Scanln(&nameOfFile)
-			req, err := http.NewRequest("GET", Url+"/usersStorage/"+name+"/"+nameOfFile, nil)
+			req, err := http.NewRequest("GET", Url+"usersStorage/"+name+"/"+nameOfFile, nil)
 			req.SetBasicAuth(name, userPassword)
 			if err == nil {
 				resp, err := client.Do(req)
@@ -113,13 +113,6 @@ func main() {
 					fmt.Printf("Error : %s", err)
 					continue
 				}
-				data, err2 := ioutil.ReadAll(resp.Body)
-				if err2 != nil {
-					fmt.Printf("Error : %s", err2)
-					continue
-				}
-				defer resp.Body.Close()
-				fmt.Println(string(data))
 				out, err1 := os.Create(nameOfFile)
 				if err1 != nil {
 					fmt.Printf("Error : %s", err)
