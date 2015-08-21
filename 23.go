@@ -1,23 +1,147 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 type FileInfo struct {
 	Name string `json:"Name"`
 	Size int64  `json:"Size"`
 }
-type mytype []map[string]string
+
+func showError(err error, mark bool) {
+	if err != nil {
+		if !mark {
+			log.Fatal("Internal Error", err)
+		}
+		log.Println("Internal Error", err)
+	}
+}
+
+func show(Url, name, userPassword string, client *http.Client) error {
+	req, err := http.NewRequest("GET", Url, nil)
+	if err != nil {
+		return err
+	}
+	req.SetBasicAuth(name, userPassword)
+	req.Header.Set("Accept", "application/json")
+	resp, err1 := client.Do(req)
+	if err1 != nil {
+		return err1
+	}
+	data, err2 := ioutil.ReadAll(resp.Body)
+	if err2 != nil {
+		return err2
+	}
+	defer resp.Body.Close()
+	res := []FileInfo{}
+	err3 := json.Unmarshal(data, &res)
+	if err3 != nil {
+		return err3
+	}
+	for i, f := range res {
+		fmt.Println(i, " ", f.Name, " size: ", f.Size)
+	}
+	return nil
+}
+
+func delete(Url, name, userPassword string, client *http.Client) error {
+	fmt.Println("input name of file")
+	var nameOfFile string
+	fmt.Scanln(&nameOfFile)
+	req, err := http.NewRequest("GET", Url, nil)
+	if err != nil {
+		return err
+	}
+	req.SetBasicAuth(name, userPassword)
+	req.Header.Set("Action", "delete "+nameOfFile)
+	_, err = client.Do(req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func uploadRequest(url string, path string) (*http.Request, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile(file.Name(), filepath.Base(path))
+	if err != nil {
+		return nil, err
+	}
+	_, err = io.Copy(part, file)
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+	return http.NewRequest("POST", url, body)
+}
+func upload(Url, userName, userPassword string, client *http.Client) error {
+	fmt.Println("input path to file")
+	var path string
+	fmt.Scanln(&path)
+	fmt.Println("input name, which you see on server")
+	var name string
+	fmt.Scanln(&name)
+	req, err := uploadRequest(Url, path)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Action", "upload "+name)
+	req.SetBasicAuth(userName, userPassword)
+	_, err1 := client.Do(req)
+	if err1 != nil {
+		return err1
+	}
+	return nil
+}
+
+func download(Url, name, userPassword string, client *http.Client) error {
+	fmt.Println("input name of file")
+	var nameOfFile string
+	fmt.Scanln(&nameOfFile)
+	req, err := http.NewRequest("GET", Url+"usersStorage/"+name+"/"+nameOfFile, nil)
+	req.SetBasicAuth(name, userPassword)
+	if err == nil {
+		resp, err1 := client.Do(req)
+		if err1 != nil {
+			return err1
+		}
+		out, err2 := os.Create(nameOfFile)
+		if err2 != nil {
+			return err2
+		}
+		defer out.Close()
+		_, err3 := io.Copy(out, resp.Body)
+		if err3 != nil {
+			return err3
+		}
+		return nil
+	}
+	return err
+}
 
 func main() {
+	var name string
+	var userPassword string
+	var input string
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
@@ -26,15 +150,13 @@ func main() {
 	Url := "https://127.0.0.1" + *port + "/cloud/"
 	fmt.Println("URL:>", Url)
 	client := &http.Client{Transport: tr}
-	var name string
-	var userPassword string
-	var input string
 	for {
 		var input string
 		fmt.Println("input name of user, input exit to exit")
 		fmt.Scanln(&input)
 		if input == "exit" {
-			os.Exit(1)
+			fmt.Println("Goodbye")
+			os.Exit(0)
 		}
 		name = input
 		fmt.Println("input password of user")
@@ -43,95 +165,33 @@ func main() {
 		req, err := http.NewRequest("GET", Url, nil)
 		req.SetBasicAuth(name, userPassword)
 		resp, err := client.Do(req)
-		if err != nil {
-			fmt.Printf("Error : %s", err)
-		} else {
-			if resp.StatusCode == 200 {
-				break
-			}
-			fmt.Println("Problem with auth")
+		if err == nil && resp.StatusCode == 200 {
+			fmt.Println("Successful auth")
+			break
 		}
+		log.Println(err, "Bad Auth")
 	}
-	fmt.Println(name, ":", userPassword)
 	for {
 		fmt.Println("input command: show, delete,download,upload,exit")
 		fmt.Scanln(&input)
 		switch {
 		case input == "show":
-			req, err := http.NewRequest("GET", Url, nil)
-			if err != nil {
-				fmt.Printf("Error : %s", err)
-				continue
-			}
-			req.SetBasicAuth(name, userPassword)
-			req.Header.Set("Accept", "application/json")
-			resp, err1 := client.Do(req)
-			if err1 != nil {
-				fmt.Printf("Error : %s", err1)
-				continue
-			}
-			data, err2 := ioutil.ReadAll(resp.Body)
-			if err2 != nil {
-				fmt.Printf("Error : %s", err2)
-				continue
-			}
-			defer resp.Body.Close()
-			res := []FileInfo{}
-			err3 := json.Unmarshal(data, &res)
-			if err3 != nil {
-				fmt.Printf("Error : %s", err3)
-				continue
-			}
-			for i, f := range res {
-				fmt.Println(i, " ", f.Name, " size: ", f.Size)
-			}
+			err := show(Url, name, userPassword, client)
+			showError(err, false)
 		case input == "delete":
-			fmt.Println("input name of file")
-			var nameOfFile string
-			fmt.Scanln(&nameOfFile)
-			req, err := http.NewRequest("GET", Url, nil)
-			if err != nil {
-				fmt.Printf("Error : %s", err)
-				continue
-			}
-			req.SetBasicAuth(name, userPassword)
-			req.Header.Set("Action", "delete "+nameOfFile)
-			_, err = client.Do(req)
-			if err != nil {
-				fmt.Printf("Error : %s", err)
-				continue
-			}
+			err := delete(Url, name, userPassword, client)
+			showError(err, false)
 		case input == "download":
-			fmt.Println("input name of file")
-			var nameOfFile string
-			fmt.Scanln(&nameOfFile)
-			req, err := http.NewRequest("GET", Url+"usersStorage/"+name+"/"+nameOfFile, nil)
-			req.SetBasicAuth(name, userPassword)
-			if err == nil {
-				resp, err := client.Do(req)
-				if err != nil {
-					fmt.Printf("Error : %s", err)
-					continue
-				}
-				out, err1 := os.Create(nameOfFile)
-				if err1 != nil {
-					fmt.Printf("Error : %s", err)
-					continue
-				}
-				defer out.Close()
-				_, err = io.Copy(out, resp.Body)
-				if err != nil {
-					fmt.Printf("Error : %s", err)
-					continue
-				}
-			}
-		case input == "download":
-			//
+			err := download(Url, name, userPassword, client)
+			showError(err, false)
+		case input == "upload":
+			err := upload(Url, name, userPassword, client)
+			showError(err, false)
 		case input == "exit":
-			os.Exit(1)
+			fmt.Println("Goodbye")
+			os.Exit(0)
 		default:
 			fmt.Println("unknown command")
 		}
 	}
-
 }
