@@ -20,11 +20,8 @@ type FileInfo struct {
 	Size int64  `json:"Size"`
 }
 
-func showError(err error, mark bool) {
+func showError(err error) {
 	if err != nil {
-		if !mark {
-			log.Fatal("Internal Error", err)
-		}
 		log.Println("Internal Error", err)
 	}
 }
@@ -177,16 +174,16 @@ func main() {
 		switch {
 		case input == "show":
 			err := show(Url, name, userPassword, client)
-			showError(err, false)
+			showError(err)
 		case input == "delete":
 			err := delete(Url, name, userPassword, client)
-			showError(err, false)
+			showError(err)
 		case input == "download":
 			err := download(Url, name, userPassword, client)
-			showError(err, false)
+			showError(err)
 		case input == "upload":
 			err := upload(Url, name, userPassword, client)
-			showError(err, false)
+			showError(err)
 		case input == "exit":
 			fmt.Println("Goodbye")
 			os.Exit(0)
